@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Acceso</title>
+</head>
+<body>
+  <h1>Verificando acceso...</h1>
+
+  <script>
+    async function checkAccess() {
+      const res = await fetch("/check");
+      const data = await res.json();
+
+      console.log("Resultado:", data);
+
+      if (data.allow) {
+        window.location.href = "/apk";
+      } else {
+        window.location.href = "/home";
+      }
+    }
+
+    checkAccess();
+  </script>
+</body>
+</html>
