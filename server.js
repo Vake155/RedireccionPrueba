@@ -71,9 +71,9 @@ app.get("/check", async (req, res) => {
   if (isAndroid) score += 2;
   if (isSpanishLang) score += 1;
 
-  if (!isAndroid) score -= 2; // penalizar desktop
+  if (!isAndroid) score -= 10; // penalizar desktop
 
-  if (vpn) score -= 4;
+  if (vpn) score -= 10;
   else score += 2;
 
   // fallback si geo falla
