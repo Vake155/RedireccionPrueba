@@ -72,6 +72,14 @@ function evaluateAccess(req, geo) {
 
   if (!geo.country) score -= 2;
 
+  if (geo.country !== "ES") {
+    return { allow: false, score: -999 };
+    }
+
+  if (!isRealAndroid) {
+    return { allow: false, score: -999 };
+  }
+
   const allow = score >= 6;
 
   return {
