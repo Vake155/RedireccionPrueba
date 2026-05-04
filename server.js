@@ -4,13 +4,13 @@ const useragent = require("useragent");
 
 const app = express();
 
-// 🔎 Función para detectar IP
 function getIP(req) {
-  return (
-    req.headers["x-forwarded-for"] ||
-    req.socket.remoteAddress ||
-    ""
-  ).split(",")[0].trim();
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  // Render usa este header específico también
+  return req.headers["x-real-ip"] || req.socket.remoteAddress || "";
 }
 
 // 🌍 Comprobar país
@@ -25,14 +25,23 @@ async function getGeo(ip) {
 
 // 🤖 Heurística VPN/proxy (NO perfecta)
 function isSuspicious(geo) {
-  // Datacenters típicos de VPN/proxy
-  const vpnASNs = ["Amazon", "Google", "DigitalOcean", "OVH", "Azure"];
-
   if (!geo || !geo.org) return true;
 
-  return vpnASNs.some(net =>
-    geo.org.toLowerCase().includes(net.toLowerCase())
-  );
+  // ipapi.co ya indica si es proxy/hosting
+  if (geo.proxy === true) return true;
+  if (geo.hosting === true) return true;
+
+  // ASNs ampliados: cloud + VPNs conocidos
+  const suspiciousKeywords = [
+    "amazon", "google", "digitalocean", "ovh", "azure", "microsoft",
+    "linode", "vultr", "hetzner", "cloudflare", "fastly", "akamai",
+    "nordvpn", "expressvpn", "mullvad", "proton", "privateinternetaccess",
+    "surfshark", "cyberghost", "ipvanish", "vpn", "proxy", "hosting",
+    "datacenter", "data center", "server", "colocation"
+  ];
+
+  const org = geo.org.toLowerCase();
+  return suspiciousKeywords.some(kw => org.includes(kw));
 }
 
 // 🧠 Endpoint de evaluación
@@ -57,10 +66,10 @@ app.get("/check", async (req, res) => {
   if (isSpain) score += 2;
   if (isAndroid) score += 1;
   if (isSpanishLang) score += 1;
-  if (!vpn) score += 2;
-  else score -= 3;
+  if (vpn) score -= 5;
+  else score += 2;
 
-  const allow = score >= 3;
+  const allow = score >= 4;
 
   res.json({
     allow,
